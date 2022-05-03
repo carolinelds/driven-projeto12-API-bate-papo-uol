@@ -81,7 +81,7 @@ app.post("/participants", async (req, res) => {
         await database.collection("participantes").insertOne(novoParticipante);
         await database.collection("mensagens").insertOne(novaMensagem);
 
-        console.log(chalk.green.bold("Login feito com sucesso"));
+        console.log(chalk.green.bold("Usuário entrou na sala com sucesso"));
         res.sendStatus(201);
 
     } catch (err) {
@@ -142,5 +142,35 @@ app.post("/messages", async (req, res) => {
         res.sendStatus(422);
     }
 })
+
+app.get("/messages", async (req,res) => {
+    const { limit } = req.query;
+    const usuario = req.headers.user;
+    try {
+        const mensagens = await database.collection("mensagens").find({}).toArray();
+
+        const mensagensFiltradas = mensagens.filter(mensagem => {
+            if (mensagem.type === 'private_message'){
+                let validation = (mensagem.from === usuario) || (mensagem.to === usuario);
+                return validation ? true : false;
+            } else {
+                return true;
+            } 
+        });
+
+        if (!limit || mensagensFiltradas.length <= limit) {
+            res.send(mensagensFiltradas);
+        } else {
+            const start = mensagensFiltradas.length - limit;
+            const end = mensagensFiltradas.length - 1;
+            const ultimasMensagens = [...mensagensFiltradas].splice(start, end);
+            res.send(ultimasMensagens);
+        }
+        
+    } catch(err) {
+        console.log(chalk.red.bold("Falha na obtenção das mensagens"));
+        res.sendStatus(500);
+    }
+});
 
 app.listen(5000, () => console.log("Server is running."));
