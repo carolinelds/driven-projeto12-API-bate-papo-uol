@@ -5,6 +5,7 @@ import { MongoClient } from 'mongodb';
 import dotenv from 'dotenv';
 import joi from 'joi';
 import dayjs from 'dayjs';
+import { stripHtml } from "string-strip-html";
 
 const app = express();
 app.use(cors());
@@ -37,8 +38,11 @@ app.post("/participants", async (req, res) => {
         return;
     };
 
+    let nomeSanitizado = stripHtml(req.body.name).result;
+    nomeSanitizado.trim();
+
     const novoParticipante = {
-        name: req.body.name,
+        name: nomeSanitizado,
         lastStatus: Date.now()
     };
 
@@ -46,7 +50,7 @@ app.post("/participants", async (req, res) => {
     now = now.format('HH:mm:ss');
 
     const novaMensagem = {
-        from: req.body.name,
+        from: nomeSanitizado,
         to: 'Todos',
         text: 'entra na sala...',
         type: 'status',
@@ -65,7 +69,9 @@ app.post("/participants", async (req, res) => {
         await database.collection("mensagens").insertOne(novaMensagem);
 
         console.log(chalk.green.bold("Usuário entrou na sala com sucesso"));
-        res.sendStatus(201);
+        res.status(201).send({
+            name: nomeSanitizado
+        });
 
     } catch (err) {
         console.log(chalk.red.bold("Erro inesperado no servidor"));
@@ -100,11 +106,11 @@ app.post("/messages", async (req, res) => {
     now = now.format('HH:mm:ss');
 
     const novaMensagem = {
-        to: req.body.to,
-        text: req.body.text,
-        type: req.body.type,
-        from: req.headers.user,
-        time: now
+        to: stripHtml(req.body.to).result.trim(),
+        text: stripHtml(req.body.text).result.trim(),
+        type: stripHtml(req.body.type).result.trim(),
+        from: stripHtml(req.headers.user).result.trim(),
+        time: stripHtml(now).result.trim()
     };
 
     try {
@@ -159,7 +165,7 @@ app.get("/messages", async (req, res) => {
 app.post("/status", async (req, res) => {
     try {
         const usuario = await database.collection("participantes").findOne({ name: req.headers.user });
-        if (usuario.toArray().length === 0) {
+        if (!usuario) {
             res.sendStatus(404);
             return;
         };
@@ -172,6 +178,8 @@ app.post("/status", async (req, res) => {
         res.sendStatus(200);
 
     } catch (err) {
+        console.log(err);
+
         res.sendStatus(404);
     };
 });
