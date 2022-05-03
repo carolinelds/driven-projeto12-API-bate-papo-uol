@@ -26,23 +26,6 @@ promise.catch(err => {
     console.log(chalk.red.bold("Falha na conexão com o banco de dados"), err)
 });
 
-/*
-Estrutura dos objetos:
-
-const participante = {
-    name: 'João', 
-    lastStatus: 12313123
-}
-
-const mensagem = {
-    from: 'João', 
-    to: 'Todos', 
-    text: 'oi galera', 
-    type: 'message', 
-    time: '20:04:37'
-}
-*/
-
 app.post("/participants", async (req, res) => {
     const nameSchema = joi.object({
         name: joi.string().required()
@@ -52,7 +35,7 @@ app.post("/participants", async (req, res) => {
         console.log(validation.error.details);
         res.sendStatus(422);
         return;
-    }
+    };
 
     const novoParticipante = {
         name: req.body.name,
@@ -76,7 +59,7 @@ app.post("/participants", async (req, res) => {
             console.log(chalk.red.bold("Esse nome já existe."));
             res.sendStatus(409);
             return;
-        }
+        };
 
         await database.collection("participantes").insertOne(novoParticipante);
         await database.collection("mensagens").insertOne(novaMensagem);
@@ -87,8 +70,8 @@ app.post("/participants", async (req, res) => {
     } catch (err) {
         console.log(chalk.red.bold("Erro inesperado no servidor"));
         res.sendStatus(500);
-    }
-})
+    };
+});
 
 app.get("/participants", async (req, res) => {
     try {
@@ -96,7 +79,7 @@ app.get("/participants", async (req, res) => {
         res.send(participantes);
     } catch (err) {
         res.sendStatus(500);
-    }
+    };
 });
 
 app.post("/messages", async (req, res) => {
@@ -111,7 +94,7 @@ app.post("/messages", async (req, res) => {
         console.log(validation.error.details);
         res.sendStatus(422);
         return;
-    }
+    };
 
     let now = dayjs();
     now = now.format('HH:mm:ss');
@@ -130,7 +113,7 @@ app.post("/messages", async (req, res) => {
             console.log(chalk.red.bold("Esse usuário não existe"));
             res.sendStatus(422);
             return;
-        }
+        };
 
         await database.collection("mensagens").insertOne(novaMensagem);
 
@@ -140,22 +123,22 @@ app.post("/messages", async (req, res) => {
     } catch (err) {
         console.log(chalk.red.bold("Falha no envio da mensagem"));
         res.sendStatus(422);
-    }
-})
+    };
+});
 
-app.get("/messages", async (req,res) => {
+app.get("/messages", async (req, res) => {
     const { limit } = req.query;
     const usuario = req.headers.user;
     try {
         const mensagens = await database.collection("mensagens").find({}).toArray();
 
         const mensagensFiltradas = mensagens.filter(mensagem => {
-            if (mensagem.type === 'private_message'){
+            if (mensagem.type === 'private_message') {
                 let validation = (mensagem.from === usuario) || (mensagem.to === usuario);
                 return validation ? true : false;
             } else {
                 return true;
-            } 
+            };
         });
 
         if (!limit || mensagensFiltradas.length <= limit) {
@@ -165,32 +148,64 @@ app.get("/messages", async (req,res) => {
             const end = mensagensFiltradas.length - 1;
             const ultimasMensagens = [...mensagensFiltradas].splice(start, end);
             res.send(ultimasMensagens);
-        }
-        
-    } catch(err) {
+        };
+
+    } catch (err) {
         console.log(chalk.red.bold("Falha na obtenção das mensagens"));
         res.sendStatus(500);
-    }
+    };
 });
 
-app.post("/status", async (req,res) => {
+app.post("/status", async (req, res) => {
     try {
         const usuario = await database.collection("participantes").findOne({ name: req.headers.user });
         if (usuario.toArray().length === 0) {
             res.sendStatus(404);
             return;
-        }
-        
+        };
+
         await database.collection("participantes").updateOne(
-            { _id: usuario._id }, 
+            { _id: usuario._id },
             { $set: { lastStatus: Date.now() } }
         );
 
         res.sendStatus(200);
 
-    } catch(err) {
+    } catch (err) {
         res.sendStatus(404);
-    }
-})
+    };
+});
+
+function removerInativos() {
+    const promise = database.collection("participantes").find({}).toArray();
+
+    promise.then(participantes => {
+        participantes.forEach(async p => {
+            if (Date.now() - p.lastStatus > 10) {
+               
+                let now = dayjs();
+                now = now.format('HH:mm:ss');
+
+                const novaMensagem = {
+                    from: p.name,
+                    to: 'Todos',
+                    text: 'sai da sala...',
+                    type: 'status',
+                    time: now
+                };
+
+                try {
+                    await database.collection("participantes").deleteOne({ _id: p._id });
+                    await database.collection("mensagens").insertOne(novaMensagem);
+                } catch (err) {
+                    console.log(err);
+                }
+            }
+        });
+    });
+}
+
+setInterval(removerInativos, 15000);
 
 app.listen(5000, () => console.log("Server is running."));
+
