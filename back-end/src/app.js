@@ -173,4 +173,24 @@ app.get("/messages", async (req,res) => {
     }
 });
 
+app.post("/status", async (req,res) => {
+    try {
+        const usuario = await database.collection("participantes").findOne({ name: req.headers.user });
+        if (usuario.toArray().length === 0) {
+            res.sendStatus(404);
+            return;
+        }
+        
+        await database.collection("participantes").updateOne(
+            { _id: usuario._id }, 
+            { $set: { lastStatus: Date.now() } }
+        );
+
+        res.sendStatus(200);
+
+    } catch(err) {
+        res.sendStatus(404);
+    }
+})
+
 app.listen(5000, () => console.log("Server is running."));
