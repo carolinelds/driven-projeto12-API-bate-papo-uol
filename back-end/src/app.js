@@ -88,7 +88,17 @@ app.post("/participants", async (req,res) => {
         console.log(chalk.red.bold("Erro inesperado no servidor"));
         res.sendStatus(500);
     }
-
 })
+
+app.get("/participants", async (req,res) => {
+    try {
+        const participantes = await database.collection("participantes").find({}).toArray();
+        res.send(participantes);
+    } catch(err) {
+        res.sendStatus(500);
+    }
+});
+
+
 
 app.listen(5000, () => console.log("Server is running."));
